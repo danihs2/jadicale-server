@@ -128,10 +128,62 @@ curl -v -X PROPFIND http://localhost:8080/caldav/alice/ \
 
 ---
 
+### REPORT calendar-query (time-range filter)
+
+```bash
+curl -v -X REPORT http://localhost:8080/caldav/alice/personal/ \
+  -u alice:password \
+  -H "Content-Type: application/xml" \
+  -d '<?xml version="1.0"?>
+<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop><D:getetag/><C:calendar-data/></D:prop>
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="VEVENT">
+        <C:time-range start="20260701T000000Z" end="20260801T000000Z"/>
+      </C:comp-filter>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>'
+# Expect: 207 with only events whose DTSTART falls in July 2026
+```
+
+### REPORT calendar-multiget (fetch specific events)
+
+```bash
+curl -v -X REPORT http://localhost:8080/caldav/alice/personal/ \
+  -u alice:password \
+  -H "Content-Type: application/xml" \
+  -d '<?xml version="1.0"?>
+<C:calendar-multiget xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop><D:getetag/><C:calendar-data/></D:prop>
+  <D:href>/caldav/alice/personal/standup.ics</D:href>
+  <D:href>/caldav/alice/personal/meeting.ics</D:href>
+</C:calendar-multiget>'
+# Expect: 207 with calendar-data for each requested event
+```
+
+### ETag conditional PUT
+
+```bash
+# Get current ETag first
+ETAG=$(curl -sI http://localhost:8080/caldav/alice/personal/standup.ics -u alice:password | grep -i etag | awk '{print $2}')
+
+# Update only if ETag matches (204 on success, 412 if stale)
+curl -v -X PUT http://localhost:8080/caldav/alice/personal/standup.ics \
+  -u alice:password \
+  -H "If-Match: $ETAG" \
+  -H "Content-Type: text/calendar" \
+  --data-binary @standup.ics
+```
+
+---
+
 ## Roadmap to full acceptance tests
 
-- [ ] REPORT calendar-query (time-range filter)
-- [ ] REPORT calendar-multiget
+- [x] REPORT calendar-query (time-range filter)
+- [x] REPORT calendar-multiget
+- [x] ETag If-Match / If-None-Match validation
 - [ ] Recurring event support
 - [ ] Calendar sharing metadata + dynamic PROPFIND across users
 - [ ] Thymeleaf web UI (list calendars, manage sharing rules, set color)
